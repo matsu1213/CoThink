@@ -1,6 +1,6 @@
 export const appErrorCodes = [
   'api_key_missing', 'invalid_api_key', 'quota_exceeded', 'network', 'timeout',
-  'unsupported_model', 'invalid_ai_output', 'credential_store', 'invalid_provider',
+  'unsupported_model', 'unsupported_endpoint', 'invalid_api_base_url', 'invalid_ai_output', 'credential_store', 'invalid_provider',
   'ai_disabled', 'empty_input', 'sqlite', 'save_failed', 'cancelled',
   'cli_not_installed', 'cli_not_authenticated', 'cli_failed', 'unknown',
 ] as const;
@@ -14,12 +14,14 @@ export type AppErrorDetails = {
 };
 
 const details: Record<AppErrorCode, AppErrorDetails> = {
-  api_key_missing: {title: 'APIキーが未設定です', message: 'OpenAI APIへ接続するためのキーが見つかりません。', action: '設定でAPIキーを保存してから、もう一度試してください。'},
-  invalid_api_key: {title: 'APIキーを確認してください', message: 'OpenAI APIがこのキーを認証できませんでした。', action: 'キーの入力間違いや失効を確認し、必要なら新しいキーを保存してください。'},
+  api_key_missing: {title: 'APIキーが未設定です', message: '選択したAPIへ接続するためのキーが見つかりません。', action: '設定でAPIキーを保存してから、もう一度試してください。'},
+  invalid_api_key: {title: 'APIキーを確認してください', message: '接続先APIがこのキーを認証できませんでした。', action: 'キーの入力間違いや失効を確認し、必要なら新しいキーを保存してください。'},
   quota_exceeded: {title: 'APIの利用上限に達しました', message: '利用量または課金上限により、レビューを実行できません。', action: 'OpenAI Platformの利用状況と請求設定を確認してください。'},
   network: {title: 'AIサービスへ接続できません', message: 'ネットワーク接続、プロキシ、または一時的なサービス障害の可能性があります。', action: '接続を確認し、少し待ってから再試行してください。'},
   timeout: {title: 'AIの応答に時間がかかっています', message: '制限時間内にレビューが完了しませんでした。', action: '再試行するか、短い範囲を選んでレビューしてください。'},
   unsupported_model: {title: 'モデルを利用できません', message: '指定したモデル名が無効か、このアカウントでは利用できません。', action: '設定で「一覧を更新」し、表示されたモデルを選んでください。'},
+  unsupported_endpoint: {title: '互換APIへ接続できません', message: '指定したサーバーにOpenAI互換のAPIが見つかりませんでした。', action: 'ベースURLに /v1 など必要なパスが含まれているか確認してください。'},
+  invalid_api_base_url: {title: 'APIベースURLを確認してください', message: 'HTTPSの有効なURLを指定する必要があります。認証情報やクエリはURLに含められません。', action: '例: https://provider.example/v1'},
   invalid_ai_output: {title: 'AIの応答をコメントにできませんでした', message: '返された内容がcothinkのコメント形式と一致しませんでした。', action: '再試行してください。続く場合は別のモデルへ変更してください。'},
   credential_store: {title: 'APIキーを安全に保存できません', message: 'OSの資格情報ストアを利用できませんでした。', action: 'OSの資格情報サービスを確認してから、もう一度保存してください。'},
   invalid_provider: {title: 'AIプロバイダーを利用できません', message: '保存されたプロバイダー設定を読み取れませんでした。', action: '設定でプロバイダーを選び直してください。'},

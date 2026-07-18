@@ -43,6 +43,11 @@ export function App() {
   useEffect(() => {
     lastReviewedText.current = undefined; setReviewError(undefined);
   }, [note?.id]);
+  useEffect(() => {
+    if (!reviewError) return;
+    const timeout = window.setTimeout(() => setReviewError(undefined), 10_000);
+    return () => window.clearTimeout(timeout);
+  }, [reviewError]);
 
   const runReview = useCallback(async (target: CommentAnchor, mode: ReviewMode, importantOnly = false) => {
     if (!note || !settings?.enabled || busy) return;
@@ -67,6 +72,7 @@ export function App() {
   const scanCandidates = useCallback(async (window: CandidateWindow, quiet = true) => {
     if (!note || !settings?.enabled || busy) return;
     abort.current = new AbortController();
+    if (!quiet) setReviewError(undefined);
     setBusy(true);
     try {
       const drafts = await api.review({noteId: note.id, mode: 'logic', selectedText: window.text, candidateScan: true}, abort.current.signal);
@@ -141,7 +147,7 @@ export function App() {
     </section>
     {selection && settings?.enabled && <SelectionReviewMenu selection={selection} busy={busy} onReview={reviewSelection}/>} 
     {note && <InlineCommentBubbles onApply={apply} onDeepDive={deepDive}/>}
-    {note && <AICompanion state={companionState} error={reviewError} onCancel={() => abort.current?.abort()} onRequest={requestCompanionComment}/>}
+    {note && <AICompanion state={companionState} error={reviewError} onDismissError={() => setReviewError(undefined)} onCancel={() => abort.current?.abort()} onRequest={requestCompanionComment}/>}
     {wholeReview && note && <ReviewDialog onClose={() => setWholeReview(false)}/>} 
     {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)}/>} 
     {intro && <div className="modal"><div className="dialog intro"><p className="eyebrow">Welcome to cothink</p><h1>答えを委ねず、考えを深める。</h1><p>書くのはあなたです。文章を選ぶと、その場でAIへ話しかけられます。初期設定では、書かれた内容を静かに追い、まとまった考えにだけ控えめな吹き出しを添えます。</p><button className="primary" onClick={() => { localStorage.setItem('cothink.intro', '1'); setIntro(false); }}>はじめる</button></div></div>}

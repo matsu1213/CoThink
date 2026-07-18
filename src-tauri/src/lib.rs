@@ -80,11 +80,21 @@ fn resolve_model(provider: &str, model: Option<String>) -> String {
 fn current_settings(db: &Database) -> AiSettings {
     let provider = db::setting(db, "ai_provider").unwrap_or_else(|| "mock".into());
     let model = resolve_model(&provider, db::setting(db, "ai_model"));
+    let api_base_url = if provider == "openai" {
+        ai::OPENAI_BASE_URL.into()
+    } else {
+        db::setting(db, "ai_api_base_url").unwrap_or_default()
+    };
     AiSettings {
         enabled: db::setting(db, "ai_enabled").as_deref() != Some("false"),
+        has_api_key: match provider.as_str() {
+            "openai" => ai::has_key(false, None),
+            "openai_compatible" => ai::has_key(true, Some(&api_base_url)),
+            _ => false,
+        },
         provider,
         model,
-        has_api_key: ai::has_key(),
+        api_base_url,
         interruption_mode: db::setting(db, "ai_interruption_mode")
             .unwrap_or_else(|| "gentle".into()),
     }
@@ -97,7 +107,7 @@ fn get_ai_settings(db: State<DbState>) -> AiSettings {
 fn save_ai_settings(db: State<DbState>, settings: SaveAiSettings) -> Result<AiSettings, AppError> {
     if !matches!(
         settings.provider.as_str(),
-        "mock" | "openai" | "codex_cli" | "claude_cli"
+        "mock" | "openai" | "openai_compatible" | "codex_cli" | "claude_cli"
     ) {
         return Err(AppError::new("invalid_provider"));
     }
@@ -115,10 +125,24 @@ fn save_ai_settings(db: State<DbState>, settings: SaveAiSettings) -> Result<AiSe
     .map_err(err)?;
     db::set_setting(&db, "ai_provider", &settings.provider).map_err(err)?;
     let model = resolve_model(&settings.provider, Some(settings.model));
+    if settings.provider == "openai_compatible" && model.is_empty() {
+        return Err(AppError::new("unsupported_model"));
+    }
     db::set_setting(&db, "ai_model", &model).map_err(err)?;
+    let compatible_base_url = if settings.provider == "openai_compatible" {
+        let base_url = ai::normalize_api_base_url(&settings.api_base_url)?;
+        db::set_setting(&db, "ai_api_base_url", &base_url).map_err(err)?;
+        Some(base_url)
+    } else {
+        None
+    };
     db::set_setting(&db, "ai_interruption_mode", &settings.interruption_mode).map_err(err)?;
     if let Some(k) = settings.api_key {
-        ai::set_key(&k)?
+        ai::set_key(
+            &k,
+            settings.provider == "openai_compatible",
+            compatible_base_url.as_deref(),
+        )?
     }
     Ok(current_settings(&db))
 }
@@ -128,6 +152,7 @@ async fn test_ai_connection(db: State<'_, DbState>) -> Result<(), AppError> {
     match s.provider.as_str() {
         "mock" => Ok(()),
         "openai" => ai::test(&s.model).await,
+        "openai_compatible" => ai::test_compatible(&s.api_base_url, &s.model).await,
         "codex_cli" => {
             cli_ai::test_provider(&s.provider).await?;
             let models = cli_ai::list_codex_models().await?;
@@ -142,10 +167,17 @@ async fn test_ai_connection(db: State<'_, DbState>) -> Result<(), AppError> {
     }
 }
 #[tauri::command]
-async fn list_ai_models(provider: String) -> Result<Vec<String>, AppError> {
+async fn list_ai_models(db: State<'_, DbState>, provider: String) -> Result<Vec<String>, AppError> {
     match provider.as_str() {
         "mock" => Ok(vec!["mock-v1".into()]),
         "openai" => ai::list_models().await,
+        "openai_compatible" => {
+            let settings = current_settings(&db);
+            if settings.provider != "openai_compatible" {
+                return Err(AppError::new("invalid_provider"));
+            }
+            ai::list_compatible_models(&settings.api_base_url).await
+        }
         "codex_cli" => cli_ai::list_codex_models().await,
         "claude_cli" => Ok(vec!["sonnet".into(), "opus".into(), "haiku".into()]),
         _ => Err(AppError::new("invalid_provider")),
@@ -196,6 +228,9 @@ async fn review_note(
         match s.provider.as_str() {
             "mock" => Ok(ai::mock_review(&request)),
             "openai" => ai::openai_review(&db, &request, &s.model).await,
+            "openai_compatible" => {
+                ai::compatible_review(&db, &request, &s.model, &s.api_base_url).await
+            }
             "codex_cli" | "claude_cli" => {
                 cli_ai::review(&db, &cli, &s.provider, &request, &s.model).await
             }

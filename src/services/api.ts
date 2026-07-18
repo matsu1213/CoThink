@@ -57,6 +57,7 @@ const initialSettings: AISettings = {
   enabled: true,
   provider: 'mock',
   model: 'mock-v1',
+  apiBaseUrl: '',
   hasApiKey: false,
   interruptionMode: 'gentle',
 };
@@ -114,16 +115,18 @@ const browserApi: AppApi = {
   async settings() { return load().settings; },
   async saveSettings(settings) {
     const db = load();
-    db.settings = {...settings, model: resolveModel(settings.provider, settings.model), hasApiKey: Boolean(settings.apiKey) || db.settings.hasApiKey};
+    const {apiKey, ...safeSettings} = settings;
+    db.settings = {...safeSettings, model: resolveModel(settings.provider, settings.model), hasApiKey: Boolean(apiKey) || db.settings.hasApiKey};
     store(db); return db.settings;
   },
   async testConnection() {
     const settings = load().settings;
-    if (settings.provider === 'openai' && !settings.hasApiKey) throw {code: 'api_key_missing'};
+    if ((settings.provider === 'openai' || settings.provider === 'openai_compatible') && !settings.hasApiKey) throw {code: 'api_key_missing'};
+    if (settings.provider === 'openai_compatible' && !settings.apiBaseUrl.startsWith('https://')) throw {code: 'invalid_api_base_url'};
     if (settings.provider === 'codex_cli' || settings.provider === 'claude_cli') throw {code: 'cli_not_installed'};
   },
   async listModels(provider) {
-    return provider === 'claude_cli' ? ['sonnet', 'opus', 'haiku'] : [defaultModels[provider]];
+    return provider === 'claude_cli' ? ['sonnet', 'opus', 'haiku'] : provider === 'openai_compatible' ? [] : [defaultModels[provider]];
   },
   async review(request, signal) {
     const settings = load().settings;

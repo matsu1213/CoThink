@@ -1,8 +1,11 @@
 import type { AIProviderKind } from '../types';
 
+export const OPENAI_BASE_URL = 'https://api.openai.com/v1';
+
 export const defaultModels: Record<AIProviderKind, string> = {
   mock: 'mock-v1',
   openai: 'gpt-5.6-terra',
+  openai_compatible: '',
   codex_cli: 'gpt-5.6-terra',
   claude_cli: 'sonnet',
 };

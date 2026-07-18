@@ -70,6 +70,7 @@ pub struct AiSettings {
     pub enabled: bool,
     pub provider: String,
     pub model: String,
+    pub api_base_url: String,
     pub has_api_key: bool,
     pub interruption_mode: String,
 }
@@ -79,6 +80,8 @@ pub struct SaveAiSettings {
     pub enabled: bool,
     pub provider: String,
     pub model: String,
+    #[serde(default)]
+    pub api_base_url: String,
     pub api_key: Option<String>,
     #[serde(default = "default_interruption_mode")]
     pub interruption_mode: String,

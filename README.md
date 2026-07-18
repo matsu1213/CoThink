@@ -12,13 +12,19 @@ npm run dev          # ブラウザ開発モード（Mockネイティブ層）
 npm run tauri dev    # デスクトップ開発モード
 ```
 
-初期設定はAI有効・Mockプロバイダーです。AIを使わない場合は設定画面で「AIレビューを有効にする」をオフにしてください。ノート、検索、コメント、書き出しは引き続き利用できます。選択できるAI経路は Mock、OpenAI API、Codex CLI、Claude Code CLIです。
+初期設定はAI有効・Mockプロバイダーです。AIを使わない場合は設定画面で「AIレビューを有効にする」をオフにしてください。ノート、検索、コメント、書き出しは引き続き利用できます。選択できるAI経路は Mock、OpenAI API、OpenAI互換API、Codex CLI、Claude Code CLIです。
 
 ## OpenAI API（BYOK）
 
 設定画面でプロバイダーを OpenAI に切り替え、APIキーとモデル名を入力します。キーは `localStorage` やSQLiteには入らず、Windows Credential Manager / macOS Keychain / Linux Secret Serviceへ保存されます。開発時のみ、資格情報が未設定なら `OPENAI_API_KEY` 環境変数を参照します。
 
 ChatGPTのサブスクリプションとOpenAI APIの利用・課金は別です。ChatGPTのCookie、セッショントークン、非公式APIは使用しません。APIキーは [OpenAI Platform](https://platform.openai.com/api-keys) で作成してください。
+
+### OpenAI互換API（BYOK）
+
+OpenAI互換の外部プロバイダーは、設定画面で「OpenAI互換API」を選び、HTTPSのAPIベースURL（例: `https://provider.example/v1`）、モデル名、APIキーを入力します。接続先には `/models` と `/chat/completions` の互換実装が必要です。APIキーはベースURLごとに別の資格情報としてOS資格情報ストアへ保存され、URL変更時に別プロバイダーのキーを流用しません。開発時のみ `OPENAI_COMPATIBLE_API_KEY` を利用できます。
+
+互換APIへレビューを依頼すると、選択範囲またはノート本文とAI指示が、ユーザーが設定したベースURLへ送信されます。接続先の利用規約・保存方針・モデル能力は各プロバイダーで異なるため、利用前に確認してください。cothinkはHTTPS URLのみ許可し、URL内のユーザー名、パスワード、クエリ、フラグメントを拒否します。
 
 選択範囲レビューはフローティングメニューから直接実行できます。ノート全体レビューだけは実行確認ダイアログを残しています。APIレスポンスは構造化JSONとして検証し、最大5コメントだけ保存します。
 
