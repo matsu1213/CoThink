@@ -19,7 +19,7 @@ export function App() {
   const comments = useStore(state => state.comments), refresh = useStore(state => state.refreshComments);
   const [selection, setSelection] = useState<TextSelection>();
   const [wholeReview, setWholeReview] = useState(false), [settingsOpen, setSettingsOpen] = useState(false);
-  const [intro, setIntro] = useState(() => !localStorage.getItem('cothink.intro'));
+  const [intro, setIntro] = useState(() => !localStorage.getItem('Cothink.intro'));
   const [busy, setBusy] = useState(false);
   const [reviewError, setReviewError] = useState<AppErrorCode>();
   const abort = useRef<AbortController | undefined>(undefined);
@@ -114,7 +114,7 @@ export function App() {
   };
   const apply = (comment: Comment) => {
     if (comment.suggestedRewrite && confirm(`変更前:\n${comment.quote ?? ''}\n\n変更後:\n${comment.suggestedRewrite}\n\nこの変更を適用しますか？`)) {
-      window.dispatchEvent(new CustomEvent('cothink-apply-rewrite', {detail: {blockId: comment.blockId, quote: comment.quote, rewrite: comment.suggestedRewrite}}));
+      window.dispatchEvent(new CustomEvent('Cothink-apply-rewrite', {detail: {blockId: comment.blockId, quote: comment.quote, rewrite: comment.suggestedRewrite}}));
     }
   };
   const deepDive = (comment: Comment) => {
@@ -150,6 +150,6 @@ export function App() {
     {note && <AICompanion state={companionState} error={reviewError} onDismissError={() => setReviewError(undefined)} onCancel={() => abort.current?.abort()} onRequest={requestCompanionComment}/>}
     {wholeReview && note && <ReviewDialog onClose={() => setWholeReview(false)}/>} 
     {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)}/>} 
-    {intro && <div className="modal"><div className="dialog intro"><p className="eyebrow">Welcome to cothink</p><h1>答えを委ねず、考えを深める。</h1><p>書くのはあなたです。文章を選ぶと、その場でAIへ話しかけられます。初期設定では、書かれた内容を静かに追い、まとまった考えにだけ控えめな吹き出しを添えます。</p><button className="primary" onClick={() => { localStorage.setItem('cothink.intro', '1'); setIntro(false); }}>はじめる</button></div></div>}
+    {intro && <div className="modal"><div className="dialog intro"><p className="eyebrow">Welcome to Cothink</p><h1>答えを委ねず、考えを深める。</h1><p>書くのはあなたです。文章を選ぶと、その場でAIへ話しかけられます。初期設定では、書かれた内容を静かに追い、まとまった考えにだけ控えめな吹き出しを添えます。</p><button className="primary" onClick={() => { localStorage.setItem('Cothink.intro', '1'); setIntro(false); }}>はじめる</button></div></div>}
   </div>;
 }

@@ -51,7 +51,7 @@ const nativeApi: AppApi = {
   exportMarkdown: (noteId, markdown) => call('export_markdown', {noteId, markdown}),
 };
 
-const key = 'cothink.dev.v1';
+const key = 'Cothink.dev.v1';
 type DevDb = {notes: Note[]; comments: Comment[]; settings: AISettings};
 const initialSettings: AISettings = {
   enabled: true,

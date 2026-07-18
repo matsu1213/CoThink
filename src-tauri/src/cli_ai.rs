@@ -34,7 +34,7 @@ pub struct CliRuntime {
 impl CliRuntime {
     pub fn new(work_dir: PathBuf) -> Result<Self, std::io::Error> {
         std::fs::create_dir_all(&work_dir)?;
-        let schema_path = work_dir.join("cothink-review-schema.json");
+        let schema_path = work_dir.join("Cothink-review-schema.json");
         std::fs::write(&schema_path, output_schema().to_string())?;
         Ok(Self {
             work_dir,
@@ -164,7 +164,7 @@ pub async fn list_codex_models() -> Result<Vec<String>, AppError> {
         .take()
         .ok_or_else(|| AppError::new("cli_failed"))?;
     let messages = [
-        json!({"method":"initialize","id":0,"params":{"clientInfo":{"name":"cothink","title":"cothink","version":env!("CARGO_PKG_VERSION")}}}),
+        json!({"method":"initialize","id":0,"params":{"clientInfo":{"name":"Cothink","title":"Cothink","version":env!("CARGO_PKG_VERSION")}}}),
         json!({"method":"initialized","params":{}}),
         json!({"method":"model/list","id":1,"params":{"includeHidden":false,"limit":100}}),
     ];

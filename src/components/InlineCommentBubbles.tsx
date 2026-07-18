@@ -140,7 +140,7 @@ export function InlineCommentBubbles({onApply, onDeepDive}: {
     setOpenIds(current => { const next = new Set(current); next.delete(comment.id); return next; });
     await refresh();
   };
-  const jump = (comment: Comment) => window.dispatchEvent(new CustomEvent('cothink-jump-anchor', {detail: comment}));
+  const jump = (comment: Comment) => window.dispatchEvent(new CustomEvent('Cothink-jump-anchor', {detail: comment}));
 
   return <div className="inline-comment-layer">
     {positions.map(position => {

@@ -1,1 +1,1 @@
-{"$schema":"../gen/schemas/desktop-schema.json","identifier":"default","description":"Minimal cothink desktop permissions","windows":["main"],"permissions":["core:default"]}
+{"$schema":"../gen/schemas/desktop-schema.json","identifier":"default","description":"Minimal Cothink desktop permissions","windows":["main"],"permissions":["core:default"]}

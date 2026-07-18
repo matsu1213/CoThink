@@ -1,6 +1,6 @@
-# cothink
+# Cothink
 
-cothink は、答えをAIへ委ねず、自分で書きながら考えを明確にする個人用デスクトップメモです。AIはエディタの隣に控えめに存在し、本文を変更せず、分離されたコメントを返します。自発的な介入頻度はユーザーが設定できます。
+Cothink は、答えをAIへ委ねず、自分で書きながら考えを明確にする個人用デスクトップメモです。AIはエディタの隣に控えめに存在し、本文を変更せず、分離されたコメントを返します。自発的な介入頻度はユーザーが設定できます。
 
 ## セットアップ
 
@@ -24,7 +24,7 @@ ChatGPTのサブスクリプションとOpenAI APIの利用・課金は別です
 
 OpenAI互換の外部プロバイダーは、設定画面で「OpenAI互換API」を選び、HTTPSのAPIベースURL（例: `https://provider.example/v1`）、モデル名、APIキーを入力します。接続先には `/models` と `/chat/completions` の互換実装が必要です。APIキーはベースURLごとに別の資格情報としてOS資格情報ストアへ保存され、URL変更時に別プロバイダーのキーを流用しません。開発時のみ `OPENAI_COMPATIBLE_API_KEY` を利用できます。
 
-互換APIへレビューを依頼すると、選択範囲またはノート本文とAI指示が、ユーザーが設定したベースURLへ送信されます。接続先の利用規約・保存方針・モデル能力は各プロバイダーで異なるため、利用前に確認してください。cothinkはHTTPS URLのみ許可し、URL内のユーザー名、パスワード、クエリ、フラグメントを拒否します。
+互換APIへレビューを依頼すると、選択範囲またはノート本文とAI指示が、ユーザーが設定したベースURLへ送信されます。接続先の利用規約・保存方針・モデル能力は各プロバイダーで異なるため、利用前に確認してください。CothinkはHTTPS URLのみ許可し、URL内のユーザー名、パスワード、クエリ、フラグメントを拒否します。
 
 選択範囲レビューはフローティングメニューから直接実行できます。ノート全体レビューだけは実行確認ダイアログを残しています。APIレスポンスは構造化JSONとして検証し、最大5コメントだけ保存します。
 
@@ -32,7 +32,7 @@ AIコンパニオンの割り込み設定は `manual_only` / `gentle` / `proacti
 
 ## Codex / Claude Code subscription
 
-設定画面で次のローカルCLI経路を選択できます。cothinkがOAuthトークンやCookieを読み取ることはなく、各CLIが安全に保持している既存ログインをそのまま利用します。
+設定画面で次のローカルCLI経路を選択できます。CothinkがOAuthトークンやCookieを読み取ることはなく、各CLIが安全に保持している既存ログインをそのまま利用します。
 
 ```powershell
 # Codex: ChatGPT subscriptionでログイン
@@ -44,13 +44,13 @@ claude auth login
 claude auth status
 ```
 
-CLIはPATH上に必要です。Codexは `codex exec --ephemeral --sandbox read-only`、Claude Codeは `claude -p --no-session-persistence` で固定実行します。レビュー本文はプロセス引数ではなくstdinだけで渡します。Claude側は組み込みツール、MCP、Chrome連携をすべて無効化し、Codex側は空の隔離ディレクトリ・read-only sandboxでツールを使わない指示を付けます。どちらも構造化スキーマを要求したうえで、cothink側でも再検証します。
+CLIはPATH上に必要です。Codexは `codex exec --ephemeral --sandbox read-only`、Claude Codeは `claude -p --no-session-persistence` で固定実行します。レビュー本文はプロセス引数ではなくstdinだけで渡します。Claude側は組み込みツール、MCP、Chrome連携をすべて無効化し、Codex側は空の隔離ディレクトリ・read-only sandboxでツールを使わない指示を付けます。どちらも構造化スキーマを要求したうえで、Cothink側でも再検証します。
 
 CodexではChatGPT workspaceの利用枠と管理ポリシーが適用されます。Claude Codeでは、2026年6月15日以降、subscription上の `claude -p` / Agent SDK利用は対話利用枠とは別の月次Agent SDK creditを消費します。利用可能性やモデルは契約・ワークスペース設定に依存します。
 
 ## データ保存先
 
-Tauriのアプリデータディレクトリ（`app.cothink.desktop`）に `cothink.sqlite3` を作成します。Markdown書き出しは同じ場所の `exports/` です。ブラウザ開発モードだけはネイティブAPIの代用品としてノートをブラウザストレージへ保存します。デスクトップ版はSQLiteが正本です。
+Tauriのアプリデータディレクトリ（`app.Cothink.desktop`）に `Cothink.sqlite3` を作成します。Markdown書き出しは同じ場所の `exports/` です。ブラウザ開発モードだけはネイティブAPIの代用品としてノートをブラウザストレージへ保存します。デスクトップ版はSQLiteが正本です。
 
 保存するものはTiptap JSON、派生プレーンテキスト、コメント、リビジョン、AI実行メタデータです。`ai_runs` は入力ハッシュだけを持ち、AIへ送信した本文そのものを保存しません。テレメトリーはありません。
 

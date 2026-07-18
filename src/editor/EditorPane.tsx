@@ -91,11 +91,11 @@ export function EditorPane({onSelection}: {onSelection(value?: TextSelection): v
         element?.closest('[data-block-id]')?.scrollIntoView({block: 'center'});
       }
     };
-    window.addEventListener('cothink-apply-rewrite', apply);
-    window.addEventListener('cothink-jump-anchor', jump);
+    window.addEventListener('Cothink-apply-rewrite', apply);
+    window.addEventListener('Cothink-jump-anchor', jump);
     return () => {
-      window.removeEventListener('cothink-apply-rewrite', apply);
-      window.removeEventListener('cothink-jump-anchor', jump);
+      window.removeEventListener('Cothink-apply-rewrite', apply);
+      window.removeEventListener('Cothink-jump-anchor', jump);
     };
   }, [editor]);
 

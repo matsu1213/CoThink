@@ -101,7 +101,7 @@ fn credential_account(compatible: bool, base_url: Option<&str>) -> Result<String
 
 fn key(compatible: bool, base_url: Option<&str>) -> Result<String, AppError> {
     let account = credential_account(compatible, base_url)?;
-    if let Ok(entry) = keyring::Entry::new("app.cothink.desktop", &account) {
+    if let Ok(entry) = keyring::Entry::new("app.Cothink.desktop", &account) {
         if let Ok(k) = entry.get_password() {
             if !k.trim().is_empty() {
                 return Ok(k);
@@ -123,7 +123,7 @@ pub fn set_key(value: &str, compatible: bool, base_url: Option<&str>) -> Result<
         return Ok(());
     }
     let account = credential_account(compatible, base_url)?;
-    keyring::Entry::new("app.cothink.desktop", &account)
+    keyring::Entry::new("app.Cothink.desktop", &account)
         .map_err(|_| AppError::new("credential_store"))?
         .set_password(value.trim())
         .map_err(|_| AppError::new("credential_store"))
@@ -391,7 +391,7 @@ pub async fn openai_review(
     } else {
         ""
     };
-    let body = json!({"model":model,"instructions":SYSTEM_PROMPT,"input":format!("レビュー方式: {}\n{}{}",r.mode,input_string,candidate_instruction),"text":{"format":{"type":"json_schema","name":"cothink_comments","strict":true,"schema":schema}}});
+    let body = json!({"model":model,"instructions":SYSTEM_PROMPT,"input":format!("レビュー方式: {}\n{}{}",r.mode,input_string,candidate_instruction),"text":{"format":{"type":"json_schema","name":"Cothink_comments","strict":true,"schema":schema}}});
     let started = Instant::now();
     let result = async {
         let res = client()?

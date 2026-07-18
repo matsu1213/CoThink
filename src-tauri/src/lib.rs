@@ -214,7 +214,7 @@ async fn review_note(
             "full_note"
         };
         println!(
-            "[cothink::ai] event=review.start request_id={} provider={} model={} mode={} scope={} candidate_scan={} input_chars={}",
+            "[Cothink::ai] event=review.start request_id={} provider={} model={} mode={} scope={} candidate_scan={} input_chars={}",
             request_id, s.provider, s.model, request.mode, scope, request.candidate_scan, input_chars
         );
     }
@@ -242,13 +242,13 @@ async fn review_note(
     #[cfg(debug_assertions)]
     match &result {
         Ok(comments) => println!(
-            "[cothink::ai] event=review.finish request_id={} status=completed comments={} latency_ms={}",
+            "[Cothink::ai] event=review.finish request_id={} status=completed comments={} latency_ms={}",
             request_id,
             comments.len(),
             debug_started.elapsed().as_millis()
         ),
         Err(error) => println!(
-            "[cothink::ai] event=review.finish request_id={} status=failed error_code={} latency_ms={}",
+            "[Cothink::ai] event=review.finish request_id={} status=failed error_code={} latency_ms={}",
             request_id,
             error.code,
             debug_started.elapsed().as_millis()
@@ -289,7 +289,7 @@ pub fn run() {
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             fs::create_dir_all(&dir)?;
-            let db = Database::open(&dir.join("cothink.sqlite3"))?;
+            let db = Database::open(&dir.join("Cothink.sqlite3"))?;
             let cli = cli_ai::CliRuntime::new(dir.join("cli-runtime"))?;
             app.manage(Arc::new(db));
             app.manage(cli);
@@ -314,7 +314,7 @@ pub fn run() {
             export_markdown
         ])
         .run(tauri::generate_context!())
-        .expect("failed to run cothink")
+        .expect("failed to run Cothink")
 }
 
 #[cfg(test)]

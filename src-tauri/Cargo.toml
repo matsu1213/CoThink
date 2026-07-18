@@ -2,8 +2,12 @@
 name = "cothink"
 version = "0.1.0"
 description = "A human-led thinking notebook"
-authors = ["cothink contributors"]
+authors = ["Cothink contributors"]
 edition = "2021"
+
+[[bin]]
+name = "Cothink"
+path = "src/main.rs"
 
 [lib]
 name = "cothink_lib"
