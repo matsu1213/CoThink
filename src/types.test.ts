@@ -1,0 +1,2 @@
+import { describe,expect,it } from 'vitest'; import { aiCommentDraftsSchema } from './types';
+describe('AI structured output',()=>{it('accepts a grounded comment',()=>expect(aiCommentDraftsSchema.safeParse([{type:'ambiguity',observation:'「使いやすい」の意味が曖昧です。',whyItMatters:'評価基準が変わります。',confidence:.8}]).success).toBe(true));it('rejects more than five and invalid confidence',()=>expect(aiCommentDraftsSchema.safeParse(Array(6).fill({type:'ambiguity',observation:'x',whyItMatters:'y',confidence:2})).success).toBe(false))});

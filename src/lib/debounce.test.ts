@@ -1,0 +1,2 @@
+import { describe,expect,it,vi } from 'vitest'; import { createDebounced } from './debounce';
+describe('debounce',()=>{it('saves only once after quiet period',()=>{vi.useFakeTimers();const fn=vi.fn(),d=createDebounced(fn,500);d('a');d('b');vi.advanceTimersByTime(499);expect(fn).not.toHaveBeenCalled();vi.advanceTimersByTime(1);expect(fn).toHaveBeenCalledOnce();expect(fn).toHaveBeenCalledWith('b');vi.useRealTimers()})});

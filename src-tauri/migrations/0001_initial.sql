@@ -1,0 +1,13 @@
+PRAGMA foreign_keys = ON;
+CREATE TABLE IF NOT EXISTS notes (id TEXT PRIMARY KEY,title TEXT NOT NULL DEFAULT '',body_json TEXT NOT NULL,body_text TEXT NOT NULL DEFAULT '',created_at TEXT NOT NULL,updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS note_revisions (id TEXT PRIMARY KEY,note_id TEXT NOT NULL,body_json TEXT NOT NULL,body_text TEXT NOT NULL,created_at TEXT NOT NULL,FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY,note_id TEXT NOT NULL,source TEXT NOT NULL,comment_type TEXT NOT NULL,body TEXT NOT NULL,why_it_matters TEXT,question TEXT,suggested_rewrite TEXT,status TEXT NOT NULL,block_id TEXT,anchor_from INTEGER,anchor_to INTEGER,quote TEXT,prefix TEXT,suffix TEXT,confidence REAL,orphaned INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS ai_runs (id TEXT PRIMARY KEY,note_id TEXT NOT NULL,provider TEXT NOT NULL,model TEXT NOT NULL,review_mode TEXT NOT NULL,prompt_version TEXT NOT NULL,input_hash TEXT NOT NULL,status TEXT NOT NULL,latency_ms INTEGER,error_code TEXT,created_at TEXT NOT NULL,FOREIGN KEY(note_id) REFERENCES notes(id) ON DELETE CASCADE);
+CREATE TABLE IF NOT EXISTS app_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_notes_updated ON notes(updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_comments_note ON comments(note_id,status);
+CREATE INDEX IF NOT EXISTS idx_revisions_note ON note_revisions(note_id,created_at DESC);
+CREATE VIRTUAL TABLE IF NOT EXISTS notes_fts USING fts5(title,body_text,content='notes',content_rowid='rowid',tokenize='trigram');
+CREATE TRIGGER IF NOT EXISTS notes_ai AFTER INSERT ON notes BEGIN INSERT INTO notes_fts(rowid,title,body_text) VALUES(new.rowid,new.title,new.body_text); END;
+CREATE TRIGGER IF NOT EXISTS notes_ad AFTER DELETE ON notes BEGIN INSERT INTO notes_fts(notes_fts,rowid,title,body_text) VALUES('delete',old.rowid,old.title,old.body_text); END;
+CREATE TRIGGER IF NOT EXISTS notes_au AFTER UPDATE ON notes BEGIN INSERT INTO notes_fts(notes_fts,rowid,title,body_text) VALUES('delete',old.rowid,old.title,old.body_text); INSERT INTO notes_fts(rowid,title,body_text) VALUES(new.rowid,new.title,new.body_text); END;

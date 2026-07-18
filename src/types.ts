@@ -1,0 +1,16 @@
+import { z } from 'zod';
+export const reviewModes=['concretize','assumptions','logic','counterpoint','essence','polish'] as const;
+export type ReviewMode=typeof reviewModes[number];
+export type ReviewRequest={noteId:string;selectedText?:string;surroundingText?:string;fullText?:string;mode:ReviewMode;candidateScan?:boolean};
+export const aiCommentDraftSchema=z.object({targetQuote:z.string().optional(),type:z.enum(['ambiguity','assumption','logic_gap','concretization','counterpoint','essence','wording']),observation:z.string().min(1),whyItMatters:z.string().min(1),question:z.string().optional(),suggestedRewrite:z.string().optional(),confidence:z.number().min(0).max(1).optional()});
+export const aiCommentDraftsSchema=z.array(aiCommentDraftSchema).max(5);
+export type AICommentDraft=z.infer<typeof aiCommentDraftSchema>;
+export type CommentAnchor={blockId:string;from:number;to:number;quote:string;prefix?:string;suffix?:string};
+export type TextSelection=Omit<CommentAnchor,'quote'>&{text:string;top:number;left:number};
+export type Note={id:string;title:string;bodyJson:string;bodyText:string;createdAt:string;updatedAt:string};
+export type Comment={id:string;noteId:string;source:'manual'|'ai';commentType:string;body:string;whyItMatters?:string;question?:string;suggestedRewrite?:string;status:'open'|'ignored'|'resolved';blockId?:string;anchorFrom?:number;anchorTo?:number;quote?:string;prefix?:string;suffix?:string;confidence?:number;orphaned:boolean;createdAt:string;updatedAt:string};
+export type SearchResult={note:Note;snippet:string};
+export type AIProviderKind='mock'|'openai'|'codex_cli'|'claude_cli';
+export type InterruptionMode='manual_only'|'gentle'|'proactive';
+export type CompanionState='idle'|'thinking'|'hasSuggestion'|'speaking'|'muted';
+export type AISettings={enabled:boolean;provider:AIProviderKind;model:string;hasApiKey:boolean;interruptionMode:InterruptionMode};

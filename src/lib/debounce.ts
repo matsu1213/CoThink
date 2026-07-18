@@ -1,0 +1,1 @@
+export function createDebounced<T extends unknown[]>(fn:(...args:T)=>void,delay:number){let timer:ReturnType<typeof setTimeout>|undefined; const run=(...args:T)=>{clearTimeout(timer);timer=setTimeout(()=>fn(...args),delay)};run.flush=(...args:T)=>{clearTimeout(timer);fn(...args)};run.cancel=()=>clearTimeout(timer);return run;}
