@@ -7,6 +7,22 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 pub const DEFAULT_MODEL: &str = "gpt-5.6-terra";
+
+fn review_capable_model(model: &str) -> bool {
+    (model.starts_with("gpt-") || model.starts_with("o3") || model.starts_with("o4"))
+        && ![
+            "audio",
+            "realtime",
+            "transcribe",
+            "tts",
+            "image",
+            "search",
+            "embedding",
+            "moderation",
+        ]
+        .iter()
+        .any(|excluded| model.contains(excluded))
+}
 pub(crate) const SYSTEM_PROMPT: &str = r#"あなたは、ユーザーが書いている隣にいる静かな友人。先生や編集者のように説明せず、考えを奪わず、気になった一か所に短く声をかける。
 原則:
 - 本文を勝手に書き換えない。評価や講評をしない。一般論を言わない。
@@ -135,6 +151,55 @@ pub async fn test(model: &str) -> Result<(), AppError> {
         let body = res.text().await.unwrap_or_default();
         Err(normalize(status, &body))
     }
+}
+pub async fn list_models() -> Result<Vec<String>, AppError> {
+    let res = client()?
+        .get("https://api.openai.com/v1/models")
+        .bearer_auth(key()?)
+        .send()
+        .await
+        .map_err(|error| {
+            if error.is_timeout() {
+                AppError::new("timeout")
+            } else {
+                AppError::new("network")
+            }
+        })?;
+    let status = res.status();
+    let raw = res.text().await.map_err(|_| AppError::new("network"))?;
+    if !status.is_success() {
+        return Err(normalize(status, &raw));
+    }
+    let response: Value =
+        serde_json::from_str(&raw).map_err(|_| AppError::new("invalid_ai_output"))?;
+    let mut models: Vec<String> = response
+        .get("data")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|model| model.get("id").and_then(Value::as_str))
+        .filter(|model| review_capable_model(model))
+        .map(str::to_owned)
+        .collect();
+    models.sort_by(|left, right| {
+        let priority = |model: &str| {
+            if model == DEFAULT_MODEL {
+                0
+            } else if model.starts_with("gpt-5.6") {
+                1
+            } else {
+                2
+            }
+        };
+        priority(left)
+            .cmp(&priority(right))
+            .then_with(|| left.cmp(right))
+    });
+    models.dedup();
+    if models.is_empty() {
+        models.push(DEFAULT_MODEL.into());
+    }
+    Ok(models)
 }
 pub(crate) fn validate(v: Value) -> Result<Vec<AiCommentDraft>, AppError> {
     let drafts: Vec<AiCommentDraft> =

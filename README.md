@@ -75,7 +75,7 @@ npm run tauri build   # デスクトップ配布物
 ## MVP上の仮定
 
 - 既存コードのない空リポジトリから開始した。
-- デフォルトモデルは品質とコストの均衡を取る `gpt-5.6-terra` とし、`src-tauri/src/ai.rs` の一か所へ集約した。設定画面で変更できる。
+- OpenAI APIとCodex CLIのデフォルトモデルは `gpt-5.6-terra`。旧設定の `gpt-5.6` は起動時にこの具体的なモデル名へ解決される。設定画面はOpenAIのModels API、またはCodex app-serverの `model/list` から現在利用可能なモデルを取得でき、手入力のモデル名も引き続き利用できる。
 - FTS5 `trigram` はbundled SQLiteを使うため利用可能。3文字以上はFTS5、1〜2文字はLIKEへ分岐する。
 - ブラウザE2EはUI/Mockプロバイダーの回帰確認、Rust統合テストはSQLiteの永続層を担当する。完全なWebViewプロセス再起動E2Eは今後の課題。
 

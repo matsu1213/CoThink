@@ -3,14 +3,18 @@ use crate::{
     db::{self, Database},
     models::{AiCommentDraft, AppError, ReviewRequest},
 };
-use serde_json::Value;
+use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
     path::PathBuf,
     process::Stdio,
     time::{Duration, Instant},
 };
-use tokio::{io::AsyncWriteExt, process::Command, time::timeout};
+use tokio::{
+    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
+    process::Command,
+    time::timeout,
+};
 
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
@@ -18,7 +22,7 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6";
+pub const DEFAULT_CODEX_MODEL: &str = "gpt-5.6-terra";
 pub const DEFAULT_CLAUDE_MODEL: &str = "sonnet";
 const MAX_OUTPUT_BYTES: usize = 1_000_000;
 
@@ -139,6 +143,89 @@ pub async fn test_provider(provider: &str) -> Result<(), AppError> {
     run(process, None, Duration::from_secs(15))
         .await
         .map(|_| ())
+}
+
+pub async fn list_codex_models() -> Result<Vec<String>, AppError> {
+    let mut process = command("codex");
+    process.args(["app-server", "--stdio"]);
+    let mut child = process.spawn().map_err(|error| {
+        if error.kind() == std::io::ErrorKind::NotFound {
+            AppError::new("cli_not_installed")
+        } else {
+            AppError::new("cli_failed")
+        }
+    })?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .ok_or_else(|| AppError::new("cli_failed"))?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| AppError::new("cli_failed"))?;
+    let messages = [
+        json!({"method":"initialize","id":0,"params":{"clientInfo":{"name":"cothink","title":"cothink","version":env!("CARGO_PKG_VERSION")}}}),
+        json!({"method":"initialized","params":{}}),
+        json!({"method":"model/list","id":1,"params":{"includeHidden":false,"limit":100}}),
+    ];
+    for message in messages {
+        stdin
+            .write_all(message.to_string().as_bytes())
+            .await
+            .map_err(|_| AppError::new("cli_failed"))?;
+        stdin
+            .write_all(b"\n")
+            .await
+            .map_err(|_| AppError::new("cli_failed"))?;
+    }
+    stdin
+        .flush()
+        .await
+        .map_err(|_| AppError::new("cli_failed"))?;
+
+    let response = match timeout(Duration::from_secs(20), async {
+        let mut lines = BufReader::new(stdout).lines();
+        while let Some(line) = lines
+            .next_line()
+            .await
+            .map_err(|_| AppError::new("cli_failed"))?
+        {
+            let value: Value = match serde_json::from_str(&line) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            if value.get("id").and_then(Value::as_i64) != Some(1) {
+                continue;
+            }
+            if value.get("error").is_some() {
+                return Err(AppError::new("cli_failed"));
+            }
+            let mut models: Vec<String> = value
+                .pointer("/result/data")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter(|item| !item.get("hidden").and_then(Value::as_bool).unwrap_or(false))
+                .filter_map(|item| item.get("model").and_then(Value::as_str))
+                .map(str::to_owned)
+                .collect();
+            models.sort();
+            models.dedup();
+            return if models.is_empty() {
+                Err(AppError::new("cli_failed"))
+            } else {
+                Ok(models)
+            };
+        }
+        Err(AppError::new("cli_failed"))
+    })
+    .await
+    {
+        Ok(response) => response,
+        Err(_) => Err(AppError::new("timeout")),
+    };
+    let _ = child.kill().await;
+    response
 }
 
 async fn codex_review(

@@ -9,7 +9,7 @@ import { AICompanion } from './components/AICompanion';
 import { api } from './services/api';
 import { documentToMarkdown } from './lib/document';
 import { candidateWindow, fallbackCandidateAnchor, GENTLE_CHANGE_CHARS, liveReviewAllowed, locateCandidateAnchor, PROACTIVE_CHANGE_CHARS, type CandidateWindow } from './lib/companion';
-import { errorMessage, type AppErrorCode } from './lib/errors';
+import { errorCode, type AppErrorCode } from './lib/errors';
 import { useStore } from './store';
 import type { Comment, CommentAnchor, CompanionState, ReviewMode, TextSelection } from './types';
 
@@ -21,7 +21,7 @@ export function App() {
   const [wholeReview, setWholeReview] = useState(false), [settingsOpen, setSettingsOpen] = useState(false);
   const [intro, setIntro] = useState(() => !localStorage.getItem('cothink.intro'));
   const [busy, setBusy] = useState(false);
-  const [reviewError, setReviewError] = useState('');
+  const [reviewError, setReviewError] = useState<AppErrorCode>();
   const abort = useRef<AbortController | undefined>(undefined);
   const lastReviewedText = useRef<string | undefined>(undefined);
   const settings = settingsValue;
@@ -41,13 +41,13 @@ export function App() {
     return () => window.removeEventListener('keydown', key);
   }, [note]);
   useEffect(() => {
-    lastReviewedText.current = undefined; setReviewError('');
+    lastReviewedText.current = undefined; setReviewError(undefined);
   }, [note?.id]);
 
   const runReview = useCallback(async (target: CommentAnchor, mode: ReviewMode, importantOnly = false) => {
     if (!note || !settings?.enabled || busy) return;
     abort.current = new AbortController();
-    setBusy(true); setReviewError('');
+    setBusy(true); setReviewError(undefined);
     try {
       let drafts = await api.review({noteId: note.id, mode, selectedText: target.quote, surroundingText: `${target.prefix ?? ''}[選択]${target.suffix ?? ''}`}, abort.current.signal);
       if (importantOnly) drafts = drafts.sort((left, right) => (right.confidence ?? .5) - (left.confidence ?? .5)).filter(draft => (draft.confidence ?? .5) >= .7).slice(0, 1);
@@ -59,8 +59,8 @@ export function App() {
       });
       await refresh();
     } catch (error) {
-      const code = (error as {code?: AppErrorCode}).code ?? 'unknown';
-      if (code !== 'cancelled') setReviewError(errorMessage(code));
+      const code = errorCode(error);
+      if (code !== 'cancelled') setReviewError(code);
     } finally { setBusy(false); }
   }, [busy, note, refresh, settings?.enabled]);
 
@@ -85,7 +85,7 @@ export function App() {
       });
       await refresh();
     } catch (error) {
-      if (!quiet) setReviewError(errorMessage(((error as {code?: AppErrorCode}).code ?? 'unknown')));
+      if (!quiet) { const code = errorCode(error); if (code !== 'cancelled') setReviewError(code); }
     } finally { setBusy(false); }
   }, [busy, note, refresh, settings?.enabled]);
 
@@ -123,7 +123,7 @@ export function App() {
   const requestCompanionComment = () => {
     if (!note || busy) return;
     const candidate = candidateWindow(JSON.parse(note.bodyJson), 20);
-    if (!candidate) { setReviewError('コメントを考えるために、もう少し文章を書いてください。'); return; }
+    if (!candidate) { setReviewError('empty_input'); return; }
     void scanCandidates(candidate, false);
   };
   const companionState: CompanionState = !settings?.enabled ? 'muted' : busy ? 'thinking' : latestOpenAI ? 'hasSuggestion' : 'idle';

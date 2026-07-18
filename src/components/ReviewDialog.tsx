@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '../services/api';
-import { errorMessage, type AppErrorCode } from '../lib/errors';
+import { errorCode, type AppErrorCode } from '../lib/errors';
+import { AIErrorNotice } from './AIErrorNotice';
 import { locateDocumentQuoteAnchor } from '../lib/companion';
 import { useStore } from '../store';
 import type { ReviewMode } from '../types';
@@ -11,9 +12,9 @@ export function ReviewDialog({onClose}: {onClose(): void}) {
   const note = useStore(state => state.active)!;
   const settings = useStore(state => state.settings), refresh = useStore(state => state.refreshComments);
   const abort = useRef<AbortController | null>(null);
-  const [mode, setMode] = useState<ReviewMode>('concretize'), [busy, setBusy] = useState(false), [error, setError] = useState('');
+  const [mode, setMode] = useState<ReviewMode>('concretize'), [busy, setBusy] = useState(false), [error, setError] = useState<AppErrorCode>();
   const run = async () => {
-    abort.current = new AbortController(); setBusy(true); setError('');
+    abort.current = new AbortController(); setBusy(true); setError(undefined);
     try {
       const drafts = await api.review({noteId: note.id, mode, fullText: note.bodyText}, abort.current.signal);
       for (const draft of drafts) {
@@ -21,9 +22,9 @@ export function ReviewDialog({onClose}: {onClose(): void}) {
         await api.createComment({noteId: note.id, source: 'ai', commentType: draft.type, body: draft.observation, whyItMatters: draft.whyItMatters, question: draft.question, suggestedRewrite: draft.suggestedRewrite, confidence: draft.confidence, blockId: anchor?.blockId, anchorFrom: anchor?.from, anchorTo: anchor?.to, quote: anchor?.quote, prefix: anchor?.prefix, suffix: anchor?.suffix});
       }
       await refresh(); onClose();
-    } catch (reviewError) { setError(errorMessage(((reviewError as {code?: AppErrorCode}).code ?? 'unknown'))); }
+    } catch (reviewError) { const code = errorCode(reviewError); if (code !== 'cancelled') setError(code); }
     finally { setBusy(false); }
   };
   if (!settings?.enabled) return <div className="modal"><div className="dialog"><h2>AIは無効です</h2><p>設定からAIプロバイダーを有効にできます。</p><button onClick={onClose}>閉じる</button></div></div>;
-  return <div className="modal"><div className="dialog"><header><h2>ノート全体をレビュー</h2><button onClick={onClose} aria-label="閉じる">×</button></header><p>レビュー方法を選んで実行します。</p><label>レビュー方法<select value={mode} onChange={event => setMode(event.target.value as ReviewMode)}>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{error && <p className="error">{error}</p>}<footer>{busy ? <><button onClick={() => abort.current?.abort()}>キャンセル</button><span>確認中…</span></> : <button className="primary" disabled={!note.bodyText} onClick={run}>レビューを実行</button>}</footer></div></div>;
+  return <div className="modal"><div className="dialog"><header><h2>ノート全体をレビュー</h2><button onClick={onClose} aria-label="閉じる">×</button></header><p>レビュー方法を選んで実行します。</p><label>レビュー方法<select value={mode} onChange={event => setMode(event.target.value as ReviewMode)}>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>{error && <AIErrorNotice code={error}/>}<footer>{busy ? <><button onClick={() => abort.current?.abort()}>キャンセル</button><span>確認中…</span></> : <button className="primary" disabled={!note.bodyText} onClick={run}>レビューを実行</button>}</footer></div></div>;
 }

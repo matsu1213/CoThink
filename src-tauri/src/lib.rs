@@ -5,13 +5,13 @@ mod models;
 use ai::DEFAULT_MODEL;
 use db::Database;
 use models::*;
+#[cfg(debug_assertions)]
+use std::time::Instant;
 use std::{
     collections::HashMap,
     fs,
     sync::{Arc, Mutex},
 };
-#[cfg(debug_assertions)]
-use std::time::Instant;
 use tauri::{Manager, State};
 use tokio::sync::Notify;
 type DbState = Arc<Database>;
@@ -58,17 +58,32 @@ fn update_comment(db: State<DbState>, id: String, status: String) -> Result<Comm
     }
     db::update_comment(&db, &id, &status).map_err(err)
 }
-fn current_settings(db: &Database) -> AiSettings {
-    let provider = db::setting(db, "ai_provider").unwrap_or_else(|| "mock".into());
-    let default_model = match provider.as_str() {
+fn default_model(provider: &str) -> &'static str {
+    match provider {
         "codex_cli" => cli_ai::DEFAULT_CODEX_MODEL,
         "claude_cli" => cli_ai::DEFAULT_CLAUDE_MODEL,
+        "mock" => "mock-v1",
         _ => DEFAULT_MODEL,
-    };
+    }
+}
+fn resolve_model(provider: &str, model: Option<String>) -> String {
+    let candidate = model.unwrap_or_default();
+    let candidate = candidate.trim();
+    if candidate.is_empty() {
+        return default_model(provider).into();
+    }
+    if matches!(provider, "openai" | "codex_cli") && candidate == "gpt-5.6" {
+        return "gpt-5.6-terra".into();
+    }
+    candidate.into()
+}
+fn current_settings(db: &Database) -> AiSettings {
+    let provider = db::setting(db, "ai_provider").unwrap_or_else(|| "mock".into());
+    let model = resolve_model(&provider, db::setting(db, "ai_model"));
     AiSettings {
         enabled: db::setting(db, "ai_enabled").as_deref() != Some("false"),
         provider,
-        model: db::setting(db, "ai_model").unwrap_or_else(|| default_model.into()),
+        model,
         has_api_key: ai::has_key(),
         interruption_mode: db::setting(db, "ai_interruption_mode")
             .unwrap_or_else(|| "gentle".into()),
@@ -99,7 +114,8 @@ fn save_ai_settings(db: State<DbState>, settings: SaveAiSettings) -> Result<AiSe
     )
     .map_err(err)?;
     db::set_setting(&db, "ai_provider", &settings.provider).map_err(err)?;
-    db::set_setting(&db, "ai_model", &settings.model).map_err(err)?;
+    let model = resolve_model(&settings.provider, Some(settings.model));
+    db::set_setting(&db, "ai_model", &model).map_err(err)?;
     db::set_setting(&db, "ai_interruption_mode", &settings.interruption_mode).map_err(err)?;
     if let Some(k) = settings.api_key {
         ai::set_key(&k)?
@@ -112,7 +128,26 @@ async fn test_ai_connection(db: State<'_, DbState>) -> Result<(), AppError> {
     match s.provider.as_str() {
         "mock" => Ok(()),
         "openai" => ai::test(&s.model).await,
-        "codex_cli" | "claude_cli" => cli_ai::test_provider(&s.provider).await,
+        "codex_cli" => {
+            cli_ai::test_provider(&s.provider).await?;
+            let models = cli_ai::list_codex_models().await?;
+            if models.iter().any(|model| model == &s.model) {
+                Ok(())
+            } else {
+                Err(AppError::new("unsupported_model"))
+            }
+        }
+        "claude_cli" => cli_ai::test_provider(&s.provider).await,
+        _ => Err(AppError::new("invalid_provider")),
+    }
+}
+#[tauri::command]
+async fn list_ai_models(provider: String) -> Result<Vec<String>, AppError> {
+    match provider.as_str() {
+        "mock" => Ok(vec!["mock-v1".into()]),
+        "openai" => ai::list_models().await,
+        "codex_cli" => cli_ai::list_codex_models().await,
+        "claude_cli" => Ok(vec!["sonnet".into(), "opus".into(), "haiku".into()]),
         _ => Err(AppError::new("invalid_provider")),
     }
 }
@@ -238,10 +273,34 @@ pub fn run() {
             get_ai_settings,
             save_ai_settings,
             test_ai_connection,
+            list_ai_models,
             review_note,
             cancel_ai_review,
             export_markdown
         ])
         .run(tauri::generate_context!())
         .expect("failed to run cothink")
+}
+
+#[cfg(test)]
+mod model_tests {
+    use super::*;
+
+    #[test]
+    fn resolves_legacy_short_model_to_a_supported_variant() {
+        assert_eq!(
+            resolve_model("codex_cli", Some("gpt-5.6".into())),
+            "gpt-5.6-terra"
+        );
+        assert_eq!(
+            resolve_model("openai", Some(" gpt-5.6 ".into())),
+            "gpt-5.6-terra"
+        );
+    }
+
+    #[test]
+    fn uses_provider_specific_defaults() {
+        assert_eq!(resolve_model("codex_cli", None), "gpt-5.6-terra");
+        assert_eq!(resolve_model("claude_cli", Some("".into())), "sonnet");
+    }
 }

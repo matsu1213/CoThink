@@ -7,6 +7,7 @@ import type {
   ReviewRequest,
   SearchResult,
 } from '../types';
+import { defaultModels, resolveModel } from '../lib/models';
 
 const native = '__TAURI_INTERNALS__' in window;
 const call = <T>(command: string, args?: Record<string, unknown>) => invoke<T>(command, args);
@@ -23,6 +24,7 @@ export interface AppApi {
   settings(): Promise<AISettings>;
   saveSettings(settings: Omit<AISettings, 'hasApiKey'> & {apiKey?: string}): Promise<AISettings>;
   testConnection(): Promise<void>;
+  listModels(provider: AISettings['provider']): Promise<string[]>;
   review(request: ReviewRequest, signal?: AbortSignal): Promise<AICommentDraft[]>;
   exportMarkdown(noteId: string, markdown: string): Promise<string>;
 }
@@ -39,6 +41,7 @@ const nativeApi: AppApi = {
   settings: () => call('get_ai_settings'),
   saveSettings: settings => call('save_ai_settings', {settings}),
   testConnection: () => call('test_ai_connection'),
+  listModels: provider => call('list_ai_models', {provider}),
   review: (request, signal) => {
     const requestId = crypto.randomUUID();
     if (signal?.aborted) return Promise.reject({code: 'cancelled'});
@@ -62,6 +65,7 @@ const load = (): DevDb => {
   if (!raw) return {notes: [], comments: [], settings: initialSettings};
   const db = JSON.parse(raw) as DevDb;
   db.settings = {...initialSettings, ...db.settings};
+  db.settings.model = resolveModel(db.settings.provider, db.settings.model);
   return db;
 };
 const store = (db: DevDb) => localStorage.setItem(key, JSON.stringify(db));
@@ -110,13 +114,16 @@ const browserApi: AppApi = {
   async settings() { return load().settings; },
   async saveSettings(settings) {
     const db = load();
-    db.settings = {...settings, hasApiKey: Boolean(settings.apiKey) || db.settings.hasApiKey};
+    db.settings = {...settings, model: resolveModel(settings.provider, settings.model), hasApiKey: Boolean(settings.apiKey) || db.settings.hasApiKey};
     store(db); return db.settings;
   },
   async testConnection() {
     const settings = load().settings;
     if (settings.provider === 'openai' && !settings.hasApiKey) throw {code: 'api_key_missing'};
     if (settings.provider === 'codex_cli' || settings.provider === 'claude_cli') throw {code: 'cli_not_installed'};
+  },
+  async listModels(provider) {
+    return provider === 'claude_cli' ? ['sonnet', 'opus', 'haiku'] : [defaultModels[provider]];
   },
   async review(request, signal) {
     const settings = load().settings;
