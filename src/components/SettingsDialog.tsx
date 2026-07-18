@@ -9,8 +9,8 @@ const defaults: Record<AIProviderKind, string> = {
 };
 const interruptionModes: {value: InterruptionMode; title: string; description: string}[] = [
   {value: 'manual_only', title: '手動のみ', description: '選択メニューや全体レビューを操作したときだけAIを呼びます。'},
-  {value: 'gentle', title: '控えめ', description: '入力が20秒止まった後にAIが候補を探し、見つかった場合は「…」だけで知らせます。'},
-  {value: 'proactive', title: '積極的', description: '入力が12秒止まった後にAIが候補を探し、重要な指摘を1件だけ表示します。'},
+  {value: 'gentle', title: '控えめ', description: '書いた内容を追い、大きな変化がまとまったときだけ吹き出しで知らせます。'},
+  {value: 'proactive', title: '積極的', description: '書いた内容を追い、短めのまとまりごとに重要な候補を1件だけ探します。'},
 ];
 
 export function SettingsDialog({onClose}: {onClose(): void}) {
@@ -45,7 +45,7 @@ export function SettingsDialog({onClose}: {onClose(): void}) {
         <input type="radio" name="interruption" value={mode.value} checked={interruptionMode === mode.value} onChange={() => setInterruptionMode(mode.value)}/>
         <span><strong>{mode.title}</strong><small>{mode.description}</small></span>
       </label>)}
-      {interruptionMode !== 'manual_only' && <p className="privacy-note">未解決の候補がある間は追加実行せず、同じ内容を繰り返しレビューしません。</p>}
+      {interruptionMode !== 'manual_only' && <p className="privacy-note">待ち時間ではなく文の区切りと変更量で判断します。未解決の候補がある間は追加実行しません。</p>}
     </fieldset>
     <label>プロバイダー<select value={provider} onChange={event => changeProvider(event.target.value as AIProviderKind)}><option value="mock">Mock（外部送信なし）</option><option value="openai">OpenAI API（BYOK）</option><option value="codex_cli">Codex CLI（ChatGPT subscription）</option><option value="claude_cli">Claude Code CLI（Claude subscription）</option></select></label>
     <label>モデル<input value={model} onChange={event => setModel(event.target.value)}/><small>{provider === 'codex_cli' ? 'Codexで利用可能なモデル名。通常は gpt-5.6。' : provider === 'claude_cli' ? 'Claude Codeのモデル名または別名。通常は sonnet。' : 'プロバイダーへ渡すモデル名。'}</small></label>

@@ -7,19 +7,43 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::time::{Duration, Instant};
 pub const DEFAULT_MODEL: &str = "gpt-5.6-terra";
-pub(crate) const SYSTEM_PROMPT: &str = r#"あなたはユーザーの代わりに考えたり、結論を決めたりするアシスタントではない。ユーザー自身の思考を明確にし、深めるための編集者として振る舞う。
+pub(crate) const SYSTEM_PROMPT: &str = r#"あなたは、ユーザーが書いている隣にいる静かな友人。先生や編集者のように説明せず、考えを奪わず、気になった一か所に短く声をかける。
 原則:
-- 本文を勝手に書き換えない。安易に褒めない。一般論だけのコメントを避ける。
+- 本文を勝手に書き換えない。評価や講評をしない。一般論を言わない。
 - 元の文章に根拠を持つコメントを返し、事実・解釈・推測・願望の混同を指摘する。
 - 曖昧な言葉や隠れた前提、論理の飛躍を具体的に特定する。
-- 必要に応じて答えではなく問いを返す。重要な指摘を最大5件に絞る。
+- 返答は会話の一言くらい短くする。説明的である必要はない。
+- 質問ばかりにしない。questionは本当に聞きたいときだけ使い、通常はnullにする。
+- まれに、原文の具体的な気持ちや迷いに沿って自然に共感してよい。ただし空疎に褒めない。
+- コメント候補の探索では最も大切な一件だけ返す。指示された原文の全部または抜粋を必ず読んで判断する。
 - ユーザーの意図を断定せず、不確実な指摘はconfidenceで示す。
-questionの書き方:
-- questionは、隣に座っている思考の相棒がふと口にする短い一言にする。説明や理由は書かず、一息で言えるくらい短く。
-- 文体は硬い敬語ではなく、話し言葉に近い口調にする。
-- 例:「これってどういうこと？」「これってホントなの？」「逆にこう考えられない？」
-- 詳しい理由・根拠はquestionではなくobservationとwhyItMattersに書く。
+- 柔らかい言葉遣いを意識する。
+- 重要度を考えたうえで、文章の趣旨にあったコメントを返す。重要度が低い場合は、コメントを返さない。
+- 文章そのものについての指摘ではなく、文章で書かれている事柄についてのコメントをする。文章の書き方や表現の指摘はしない。
+出力:
+- observationは吹き出しに出す短い一言。硬い敬語や解説調を避ける。
+- whyItMattersには内部的な根拠を簡潔に入れるが、observationで繰り返さない。
+- questionも使うなら一息で言える長さにする。
+- targetQuoteには判断の根拠にした原文の短い引用を一字一句そのまま入れる。
 日本語で、指定されたJSON Schemaだけを返す。"#;
+
+pub(crate) fn review_input(request: &ReviewRequest) -> String {
+    let (scope, text) = if let Some(selected) = &request.selected_text {
+        ("文章の一部", selected.as_str())
+    } else {
+        ("文章の全部", request.full_text.as_deref().unwrap_or(""))
+    };
+    let context = request
+        .surrounding_text
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .map(|value| format!("\n最小限の前後文脈:\n<context>\n{value}\n</context>"))
+        .unwrap_or_default();
+    format!(
+        "範囲: {scope}\n文章（全文または抜粋）:\n<text>\n{text}\n</text>{context}\ncandidateScan: {}",
+        request.candidate_scan
+    )
+}
 
 pub(crate) fn output_schema() -> Value {
     json!({
@@ -151,15 +175,17 @@ pub fn mock_review(r: &ReviewRequest) -> Vec<AiCommentDraft> {
         Some(t.chars().take(80).collect())
     };
     let focus = target_quote.as_deref().unwrap_or(t);
-    let observation = format!(
-        "「{}{}」で用いる判断基準が文章内では一つに定まっていません。",
+    let focus_length = focus.chars().count();
+    let excerpt = format!(
+        "{}{}",
         focus.chars().take(28).collect::<String>(),
-        if focus.chars().count() > 28 {
-            "…"
-        } else {
-            ""
-        }
+        if focus_length > 28 { "…" } else { "" }
     );
+    let observation = if focus_length % 11 == 1 {
+        format!("「{excerpt}」って迷う感じ、わかる。")
+    } else {
+        format!("「{excerpt}」の基準、もう少し一緒に見たい。")
+    };
     vec![AiCommentDraft {
         target_quote,
         kind: match r.mode.as_str() {
@@ -174,7 +200,7 @@ pub fn mock_review(r: &ReviewRequest) -> Vec<AiCommentDraft> {
         observation,
         why_it_matters: "異なる基準で解釈すると、読み手が同じ結論に到達できない可能性があります。"
             .into(),
-        question: Some("ここで大事にしてる基準って何？".into()),
+        question: (focus_length % 11 == 0).then(|| "ここで大事にしてる基準って何？".into()),
         suggested_rewrite: None,
         confidence: Some(0.82),
     }]
@@ -184,20 +210,15 @@ pub async fn openai_review(
     r: &ReviewRequest,
     model: &str,
 ) -> Result<Vec<AiCommentDraft>, AppError> {
-    let input = if let Some(s) = &r.selected_text {
-        json!({"scope":"selection","selectedText":s,"surroundingText":r.surrounding_text,"candidateScan":r.candidate_scan})
-    } else {
-        json!({"scope":"full_note","fullText":r.full_text})
-    };
-    let input_string = input.to_string();
+    let input_string = review_input(r);
     let hash = hex::encode(Sha256::digest(input_string.as_bytes()));
     let schema = output_schema();
     let candidate_instruction = if r.candidate_scan {
-        "\nコメントすべき箇所をあなたが選び、targetQuoteには対象内の短い原文を一字一句そのまま入れること。重要な候補だけを返すこと。"
+        "\n文章の中から今声をかける価値がある箇所を一つだけ選ぶこと。特になければcommentsを空配列にすること。"
     } else {
         ""
     };
-    let body = json!({"model":model,"instructions":SYSTEM_PROMPT,"input":format!("レビュー方式: {}\n対象(JSON): {}{}",r.mode,input_string,candidate_instruction),"text":{"format":{"type":"json_schema","name":"cothink_comments","strict":true,"schema":schema}}});
+    let body = json!({"model":model,"instructions":SYSTEM_PROMPT,"input":format!("レビュー方式: {}\n{}{}",r.mode,input_string,candidate_instruction),"text":{"format":{"type":"json_schema","name":"cothink_comments","strict":true,"schema":schema}}});
     let started = Instant::now();
     let result = async {
         let res = client()?

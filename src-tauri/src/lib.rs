@@ -10,6 +10,8 @@ use std::{
     fs,
     sync::{Arc, Mutex},
 };
+#[cfg(debug_assertions)]
+use std::time::Instant;
 use tauri::{Manager, State};
 use tokio::sync::Notify;
 type DbState = Arc<Database>;
@@ -129,6 +131,26 @@ async fn review_note(
     if request.selected_text.is_none() && request.full_text.is_none() {
         return Err(AppError::new("empty_input"));
     }
+    #[cfg(debug_assertions)]
+    let debug_started = Instant::now();
+    #[cfg(debug_assertions)]
+    {
+        let input_chars = request
+            .selected_text
+            .as_deref()
+            .or(request.full_text.as_deref())
+            .map(|text| text.chars().count())
+            .unwrap_or(0);
+        let scope = if request.selected_text.is_some() {
+            "selection"
+        } else {
+            "full_note"
+        };
+        println!(
+            "[cothink::ai] event=review.start request_id={} provider={} model={} mode={} scope={} candidate_scan={} input_chars={}",
+            request_id, s.provider, s.model, request.mode, scope, request.candidate_scan, input_chars
+        );
+    }
     let notify = Arc::new(Notify::new());
     cancels
         .0
@@ -147,6 +169,21 @@ async fn review_note(
     };
     let result = tokio::select! {r=work=>r,_=notify.notified()=>Err(AppError::new("cancelled"))};
     cancels.0.lock().unwrap().remove(&request_id);
+    #[cfg(debug_assertions)]
+    match &result {
+        Ok(comments) => println!(
+            "[cothink::ai] event=review.finish request_id={} status=completed comments={} latency_ms={}",
+            request_id,
+            comments.len(),
+            debug_started.elapsed().as_millis()
+        ),
+        Err(error) => println!(
+            "[cothink::ai] event=review.finish request_id={} status=failed error_code={} latency_ms={}",
+            request_id,
+            error.code,
+            debug_started.elapsed().as_millis()
+        ),
+    }
     result
 }
 #[tauri::command]

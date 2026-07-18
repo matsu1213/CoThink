@@ -68,16 +68,16 @@ export function EditorPane({onSelection}: {onSelection(value?: TextSelection): v
   useEffect(() => {
     if (!editor) return;
     const locate = (detail: AnchorEvent) => {
-      let found: {from: number; to: number} | undefined;
+      let found: {from: number; to: number} | undefined, positionalFallback: {from: number; to: number} | undefined;
       editor.state.doc.descendants((node, position) => {
         if (found) return false;
         if (node.attrs.blockId === detail.blockId) {
           const offset = detail.quote ? node.textContent.indexOf(detail.quote) : -1;
           if (offset >= 0) found = {from: position + 1 + offset, to: position + 1 + offset + (detail.quote?.length ?? 0)};
-          else if (detail.anchorFrom != null && detail.anchorTo != null) found = {from: position + 1 + detail.anchorFrom, to: position + 1 + detail.anchorTo};
+          else if (!positionalFallback && detail.anchorFrom != null && detail.anchorTo != null) positionalFallback = {from: position + 1 + detail.anchorFrom, to: position + 1 + detail.anchorTo};
         }
       });
-      return found;
+      return found ?? positionalFallback;
     };
     const apply = (event: Event) => {
       const detail = (event as CustomEvent<AnchorEvent>).detail, range = locate(detail);
@@ -87,7 +87,8 @@ export function EditorPane({onSelection}: {onSelection(value?: TextSelection): v
       const detail = (event as CustomEvent<AnchorEvent>).detail, range = locate(detail);
       if (range) {
         editor.chain().focus().setTextSelection(range).scrollIntoView().run();
-        document.querySelector(`[data-block-id="${CSS.escape(detail.blockId ?? '')}"]`)?.scrollIntoView({block: 'center'});
+        const point = editor.view.domAtPos(range.from), element = point.node instanceof Element ? point.node : point.node.parentElement;
+        element?.closest('[data-block-id]')?.scrollIntoView({block: 'center'});
       }
     };
     window.addEventListener('cothink-apply-rewrite', apply);

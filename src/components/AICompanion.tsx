@@ -5,9 +5,9 @@ function Face({state}: {state: CompanionState}) {
   return <svg viewBox="0 0 40 40" role="img" aria-label={`AIコンパニオン: ${state}`}><circle cx="20" cy="20" r="16" fill="none" stroke="currentColor" strokeWidth="1.7"/><circle cx="15" cy="17" r="1.5" fill="currentColor"/><circle cx="25" cy="17" r="1.5" fill="currentColor"/><path d={mouth} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>;
 }
 
-export function AICompanion({state, error, onCancel}: {state: CompanionState; error?: string; onCancel(): void}) {
+export function AICompanion({state, error, onCancel, onRequest}: {state: CompanionState; error?: string; onCancel(): void; onRequest(): void}) {
   return <div className={`ai-companion ${state}`}>
     {error && <div className="companion-error" role="alert">{error}</div>}
-    {state === 'thinking' ? <button className="companion-face" onClick={onCancel} aria-label="AIレビューをキャンセル"><Face state={state}/><span className="thinking-mark">考え中</span></button> : <div className="companion-face" aria-hidden={state === 'muted'}><Face state={state}/></div>}
+    {state === 'thinking' ? <button className="companion-face" onClick={onCancel} aria-label="AIレビューをキャンセル"><Face state={state}/><span className="thinking-mark">考え中</span></button> : <button className="companion-face" onClick={onRequest} disabled={state === 'muted'} aria-label="AIにコメントを求める"><Face state={state}/></button>}
   </div>;
 }

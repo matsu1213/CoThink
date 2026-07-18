@@ -1,9 +1,9 @@
 use crate::{
-    ai::{output_schema, validate, SYSTEM_PROMPT},
+    ai::{output_schema, review_input, validate, SYSTEM_PROMPT},
     db::{self, Database},
     models::{AiCommentDraft, AppError, ReviewRequest},
 };
-use serde_json::{json, Value};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::{
     path::PathBuf,
@@ -40,19 +40,14 @@ impl CliRuntime {
 }
 
 fn review_prompt(request: &ReviewRequest) -> String {
-    let input = if let Some(selected) = &request.selected_text {
-        json!({"scope":"selection","selectedText":selected,"surroundingText":request.surrounding_text,"candidateScan":request.candidate_scan})
-    } else {
-        json!({"scope":"full_note","fullText":request.full_text})
-    };
     let candidate_instruction = if request.candidate_scan {
-        "\nコメントすべき箇所をあなたが選び、targetQuoteには対象内の短い原文を一字一句そのまま入れること。重要な候補だけを返すこと。"
+        "\n文章の中から今声をかける価値がある箇所を一つだけ選ぶこと。特になければcommentsを空配列にすること。"
     } else {
         ""
     };
     format!(
-        "{SYSTEM_PROMPT}\n\nこの依頼ではツールを一切使用せず、ファイルや環境を調べないこと。与えられた対象だけをレビューすること。\nレビュー方式: {}\n対象(JSON): {}{}\ncomments配列を持つJSONオブジェクトだけを返すこと。",
-        request.mode, input, candidate_instruction
+        "{SYSTEM_PROMPT}\n\nこの依頼ではツールを一切使用せず、ファイルや環境を調べないこと。与えられた文章だけを見ること。\nレビュー方式: {}\n{}{}\ncomments配列を持つJSONオブジェクトだけを返すこと。",
+        request.mode, review_input(request), candidate_instruction
     )
 }
 
@@ -281,7 +276,7 @@ mod tests {
 
     #[test]
     fn schema_accepts_the_shared_comment_contract() {
-        let comments = json!([{
+        let comments = serde_json::json!([{
             "type":"logic_gap",
             "observation":"根拠が不足しています。",
             "whyItMatters":"結論を再現できません。"

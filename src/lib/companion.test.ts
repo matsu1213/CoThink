@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoReviewAllowed, candidateWindow, GENTLE_COOLDOWN_MS, locateCandidateAnchor, locateDocumentQuoteAnchor, speechLead } from './companion';
+import { candidateWindow, fallbackCandidateAnchor, GENTLE_CHANGE_CHARS, liveReviewAllowed, locateCandidateAnchor, locateDocumentQuoteAnchor, speechLead } from './companion';
 
 const document = {type: 'doc', content: [
   {type: 'paragraph', attrs: {blockId: 'a'}, content: [{type: 'text', text: 'この判断では利用者が毎日使うという前提を置いています。'}]},
@@ -19,16 +19,27 @@ describe('AI companion candidate scan policy', () => {
     expect(locateCandidateAnchor('原文に存在しない文', window)).toBeUndefined();
   });
 
+  it('anchors a quote despite whitespace, width, and wrapping quote differences', () => {
+    const window = candidateWindow({type: 'doc', content: [{type: 'paragraph', attrs: {blockId: 'a'}, content: [{type: 'text', text: 'ＡＩ と  一緒に考える。その過程を大切にしたい。'}]}]}, 10)!;
+    expect(locateCandidateAnchor('「AIと一緒に考える。」', window)).toMatchObject({blockId: 'a', quote: 'ＡＩ と  一緒に考える。'});
+  });
+
+  it('falls back to a real block when AI returns an unusable quote', () => {
+    const window = candidateWindow(document, 40)!;
+    expect(fallbackCandidateAnchor(window)).toMatchObject({blockId: 'b'});
+  });
+
   it('anchors whole-note review quotes for inline bubbles', () => {
     expect(locateDocumentQuoteAnchor(document, '利用者が毎日使うという前提')).toMatchObject({blockId: 'a'});
   });
 
-  it('prevents duplicate, frequent, or overlapping scans', () => {
-    const base = {now: GENTLE_COOLDOWN_MS, lastRunAt: 0, cooldownMs: GENTLE_COOLDOWN_MS, signature: 'note:window', hasOpenSuggestion: false};
-    expect(autoReviewAllowed(base)).toBe(true);
-    expect(autoReviewAllowed({...base, lastSignature: base.signature})).toBe(false);
-    expect(autoReviewAllowed({...base, now: GENTLE_COOLDOWN_MS - 1})).toBe(false);
-    expect(autoReviewAllowed({...base, hasOpenSuggestion: true})).toBe(false);
+  it('tracks edits immediately but only sends meaningful completed changes', () => {
+    const text = `${'考えを続けています'.repeat(12)}。`;
+    const base = {text, minChangedCharacters: GENTLE_CHANGE_CHARS, hasOpenSuggestion: false};
+    expect(liveReviewAllowed(base)).toBe(true);
+    expect(liveReviewAllowed({...base, lastReviewedText: text})).toBe(false);
+    expect(liveReviewAllowed({...base, text: text.slice(0, -1)})).toBe(false);
+    expect(liveReviewAllowed({...base, hasOpenSuggestion: true})).toBe(false);
   });
 });
 

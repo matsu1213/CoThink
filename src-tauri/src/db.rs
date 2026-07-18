@@ -193,7 +193,7 @@ pub fn log_run(
     error: Option<&str>,
 ) {
     let _ = db.0.lock().unwrap().execute(
-        "INSERT INTO ai_runs VALUES(?1,?2,?3,?4,?5,'v2',?6,?7,?8,?9,?10)",
+        "INSERT INTO ai_runs VALUES(?1,?2,?3,?4,?5,'v3',?6,?7,?8,?9,?10)",
         params![
             Uuid::new_v4().to_string(),
             note,

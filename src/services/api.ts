@@ -130,12 +130,15 @@ const browserApi: AppApi = {
       ? text.split(/\r?\n/).filter(Boolean).at(-1)?.trim().slice(0, 40)
       : text.slice(0, 80);
     const focus = request.candidateScan ? targetQuote || text : text;
+    const tone = focus.length % 11;
     return [{
       targetQuote,
       type: request.mode === 'polish' ? 'wording' : request.mode === 'assumptions' ? 'assumption' : request.mode === 'logic' ? 'logic_gap' : request.mode === 'counterpoint' ? 'counterpoint' : request.mode === 'essence' ? 'essence' : 'ambiguity',
-      observation: `「${focus.slice(0, 28)}${focus.length > 28 ? '…' : ''}」の判断基準が文章内では一つに定まっていません。`,
+      observation: tone === 1
+        ? `「${focus.slice(0, 28)}${focus.length > 28 ? '…' : ''}」って迷う感じ、わかる。`
+        : `「${focus.slice(0, 28)}${focus.length > 28 ? '…' : ''}」の基準、もう少し一緒に見たい。`,
       whyItMatters: '読み手が異なる基準で解釈すると、同じ結論に到達できない可能性があります。',
-      question: 'ここで大事にしてる基準って何？',
+      question: tone === 0 ? 'ここで大事にしてる基準って何？' : undefined,
       suggestedRewrite: request.mode === 'polish' && text ? `${text}（判断基準を具体化する）` : undefined,
       confidence: .82,
     }];

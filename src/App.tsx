@@ -8,7 +8,7 @@ import { SelectionReviewMenu } from './components/SelectionReviewMenu';
 import { AICompanion } from './components/AICompanion';
 import { api } from './services/api';
 import { documentToMarkdown } from './lib/document';
-import { autoReviewAllowed, candidateWindow, GENTLE_COOLDOWN_MS, GENTLE_IDLE_MS, locateCandidateAnchor, PROACTIVE_COOLDOWN_MS, PROACTIVE_IDLE_MS, type CandidateWindow } from './lib/companion';
+import { candidateWindow, fallbackCandidateAnchor, GENTLE_CHANGE_CHARS, liveReviewAllowed, locateCandidateAnchor, PROACTIVE_CHANGE_CHARS, type CandidateWindow } from './lib/companion';
 import { errorMessage, type AppErrorCode } from './lib/errors';
 import { useStore } from './store';
 import type { Comment, CommentAnchor, CompanionState, ReviewMode, TextSelection } from './types';
@@ -21,10 +21,9 @@ export function App() {
   const [wholeReview, setWholeReview] = useState(false), [settingsOpen, setSettingsOpen] = useState(false);
   const [intro, setIntro] = useState(() => !localStorage.getItem('cothink.intro'));
   const [busy, setBusy] = useState(false);
-  const [openCommentId, setOpenCommentId] = useState<string>();
   const [reviewError, setReviewError] = useState('');
   const abort = useRef<AbortController | undefined>(undefined);
-  const lastAutoRun = useRef(0), lastAutoSignature = useRef<string | undefined>(undefined);
+  const lastReviewedText = useRef<string | undefined>(undefined);
   const settings = settingsValue;
   const latestOpenAI = [...comments]
     .filter(comment => comment.source === 'ai' && comment.status === 'open')
@@ -42,7 +41,7 @@ export function App() {
     return () => window.removeEventListener('keydown', key);
   }, [note]);
   useEffect(() => {
-    setOpenCommentId(undefined); setReviewError('');
+    lastReviewedText.current = undefined; setReviewError('');
   }, [note?.id]);
 
   const runReview = useCallback(async (target: CommentAnchor, mode: ReviewMode, importantOnly = false) => {
@@ -52,22 +51,20 @@ export function App() {
     try {
       let drafts = await api.review({noteId: note.id, mode, selectedText: target.quote, surroundingText: `${target.prefix ?? ''}[選択]${target.suffix ?? ''}`}, abort.current.signal);
       if (importantOnly) drafts = drafts.sort((left, right) => (right.confidence ?? .5) - (left.confidence ?? .5)).filter(draft => (draft.confidence ?? .5) >= .7).slice(0, 1);
-      const created: Comment[] = [];
-      for (const draft of drafts) created.push(await api.createComment({
+      for (const draft of drafts) await api.createComment({
         noteId: note.id, source: 'ai', commentType: draft.type, body: draft.observation,
         whyItMatters: draft.whyItMatters, question: draft.question, suggestedRewrite: draft.suggestedRewrite,
         confidence: draft.confidence, blockId: target.blockId, anchorFrom: target.from, anchorTo: target.to,
         quote: target.quote, prefix: target.prefix, suffix: target.suffix,
-      }));
+      });
       await refresh();
-      if (created[0]) setOpenCommentId(created[0].id);
     } catch (error) {
       const code = (error as {code?: AppErrorCode}).code ?? 'unknown';
       if (code !== 'cancelled') setReviewError(errorMessage(code));
     } finally { setBusy(false); }
   }, [busy, note, refresh, settings?.enabled]);
 
-  const scanCandidates = useCallback(async (window: CandidateWindow, reveal: boolean) => {
+  const scanCandidates = useCallback(async (window: CandidateWindow, quiet = true) => {
     if (!note || !settings?.enabled || busy) return;
     abort.current = new AbortController();
     setBusy(true);
@@ -76,10 +73,10 @@ export function App() {
       const candidate = drafts
         .sort((left, right) => (right.confidence ?? .5) - (left.confidence ?? .5))
         .filter(draft => (draft.confidence ?? .5) >= .65)
-        .map(draft => ({draft, anchor: locateCandidateAnchor(draft.targetQuote, window)}))
+        .map(draft => ({draft, anchor: locateCandidateAnchor(draft.targetQuote, window) ?? fallbackCandidateAnchor(window)}))
         .find(item => item.anchor);
       if (!candidate?.anchor) return;
-      const created = await api.createComment({
+      await api.createComment({
         noteId: note.id, source: 'ai', commentType: candidate.draft.type, body: candidate.draft.observation,
         whyItMatters: candidate.draft.whyItMatters, question: candidate.draft.question,
         suggestedRewrite: candidate.draft.suggestedRewrite, confidence: candidate.draft.confidence,
@@ -87,9 +84,8 @@ export function App() {
         quote: candidate.anchor.quote, prefix: candidate.anchor.prefix, suffix: candidate.anchor.suffix,
       });
       await refresh();
-      setOpenCommentId(reveal ? created.id : undefined);
-    } catch {
-      // Automatic scans stay quiet; manual review continues to surface errors.
+    } catch (error) {
+      if (!quiet) setReviewError(errorMessage(((error as {code?: AppErrorCode}).code ?? 'unknown')));
     } finally { setBusy(false); }
   }, [busy, note, refresh, settings?.enabled]);
 
@@ -97,15 +93,10 @@ export function App() {
     if (!note || !settings?.enabled || settings.interruptionMode === 'manual_only' || busy) return;
     const candidate = candidateWindow(JSON.parse(note.bodyJson));
     if (!candidate) return;
-    const delay = settings.interruptionMode === 'gentle' ? GENTLE_IDLE_MS : PROACTIVE_IDLE_MS;
-    const timer = window.setTimeout(() => {
-      const signature = `${note.id}:${candidate.signature}`;
-      const cooldownMs = settings.interruptionMode === 'gentle' ? GENTLE_COOLDOWN_MS : PROACTIVE_COOLDOWN_MS;
-      if (!autoReviewAllowed({now: Date.now(), lastRunAt: lastAutoRun.current, cooldownMs, signature, lastSignature: lastAutoSignature.current, hasOpenSuggestion: Boolean(latestOpenAI || busy)})) return;
-      lastAutoRun.current = Date.now(); lastAutoSignature.current = signature;
-      void scanCandidates(candidate, settings.interruptionMode === 'proactive');
-    }, delay);
-    return () => window.clearTimeout(timer);
+    const minChangedCharacters = settings.interruptionMode === 'gentle' ? GENTLE_CHANGE_CHARS : PROACTIVE_CHANGE_CHARS;
+    if (!liveReviewAllowed({text: candidate.text, lastReviewedText: lastReviewedText.current, minChangedCharacters, hasOpenSuggestion: Boolean(latestOpenAI || busy)})) return;
+    lastReviewedText.current = candidate.text;
+    void scanCandidates(candidate);
   }, [note, settings?.enabled, settings?.interruptionMode, busy, latestOpenAI, scanCandidates]);
 
   const manualComment = async () => {
@@ -129,6 +120,12 @@ export function App() {
     const target: CommentAnchor = {...selection, quote: selection.text};
     setSelection(undefined); void runReview(target, mode);
   };
+  const requestCompanionComment = () => {
+    if (!note || busy) return;
+    const candidate = candidateWindow(JSON.parse(note.bodyJson), 20);
+    if (!candidate) { setReviewError('コメントを考えるために、もう少し文章を書いてください。'); return; }
+    void scanCandidates(candidate, false);
+  };
   const companionState: CompanionState = !settings?.enabled ? 'muted' : busy ? 'thinking' : latestOpenAI ? 'hasSuggestion' : 'idle';
 
   return <div className="app">
@@ -143,10 +140,10 @@ export function App() {
       <div className="content"><EditorPane onSelection={setSelection}/></div>
     </section>
     {selection && settings?.enabled && <SelectionReviewMenu selection={selection} busy={busy} onReview={reviewSelection}/>} 
-    {note && <InlineCommentBubbles openCommentId={openCommentId} onDismiss={id => setOpenCommentId(current => current === id ? undefined : current)} onApply={apply} onDeepDive={deepDive}/>} 
-    {note && <AICompanion state={companionState} error={reviewError} onCancel={() => abort.current?.abort()}/>}
+    {note && <InlineCommentBubbles onApply={apply} onDeepDive={deepDive}/>}
+    {note && <AICompanion state={companionState} error={reviewError} onCancel={() => abort.current?.abort()} onRequest={requestCompanionComment}/>}
     {wholeReview && note && <ReviewDialog onClose={() => setWholeReview(false)}/>} 
     {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)}/>} 
-    {intro && <div className="modal"><div className="dialog intro"><p className="eyebrow">Welcome to cothink</p><h1>答えを委ねず、考えを深める。</h1><p>書くのはあなたです。文章を選ぶと、その場でAIへ問いかけられます。初期設定では、入力が止まった後にAIがコメント候補を探し、見つかったときだけ控えめに合図します。</p><button className="primary" onClick={() => { localStorage.setItem('cothink.intro', '1'); setIntro(false); }}>はじめる</button></div></div>}
+    {intro && <div className="modal"><div className="dialog intro"><p className="eyebrow">Welcome to cothink</p><h1>答えを委ねず、考えを深める。</h1><p>書くのはあなたです。文章を選ぶと、その場でAIへ話しかけられます。初期設定では、書かれた内容を静かに追い、まとまった考えにだけ控えめな吹き出しを添えます。</p><button className="primary" onClick={() => { localStorage.setItem('cothink.intro', '1'); setIntro(false); }}>はじめる</button></div></div>}
   </div>;
 }
