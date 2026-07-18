@@ -31,7 +31,7 @@ Tiptap JSONが本文の正本で、`body_text` は検索と送信用の派生値
 
 UI公開型は `ReviewRequest` / `AICommentDraft`。ネイティブ層で Mock、OpenAI API、Codex CLI、Claude Code CLIを交換する。すべて同じ構造化コメント契約をRustとUI双方で検証する。入力はSHA-256ハッシュのみ `ai_runs` に記録し、本文は記録しない。実行中はリクエストIDごとのキャンセル通知でHTTPまたは子プロセスfutureを破棄できる。
 
-選択レビュー、コンパニオン、従来の全体確認ダイアログは同じ `api.review` と `create_comment` を共有する。割り込みモードは既存の `app_settings` に `ai_interruption_mode` として保存するためスキーマ追加は不要。自発レビューは静止後、直近の最大3ブロックからなる有界な候補ウィンドウをAIへ渡し、AIに原文の `targetQuote` を選ばせる。返された引用がブロック内で完全一致した場合だけアンカー付き候補として保存する。`gentle` は候補を隠してバッジだけ、`proactive` はconfidence 0.65以上の最上位1件を吹き出し表示する。未解決候補、同一内容、クールダウン中は実行しない。
+選択レビュー、コンパニオン、従来の全体確認ダイアログは同じ `api.review` と `create_comment` を共有する。割り込みモードは既存の `app_settings` に `ai_interruption_mode` として保存するためスキーマ追加は不要。自発レビューは静止後、直近の最大3ブロックからなる有界な候補ウィンドウをAIへ渡し、AIに原文の `targetQuote` を選ばせる。返された引用がブロック内で完全一致した場合だけアンカー付き候補として保存する。コメントUIは右パネルを持たず、解決済みアンカーからDOM Rangeを測定して引用末尾の横へ複数の吹き出しマーカーを配置する。同一行のマーカーは衝突回避で縦にずらし、スクロールとリサイズ時に再測定する。未解決候補、同一内容、クールダウン中は自発レビューを実行しない。
 
 CLI経路はユーザー入力を実行ファイル名や引数へ展開しない。実行可能ファイルは `codex` / `claude`、引数はコード内の許可済み固定値で、本文はstdinだけに渡す。子プロセスはWindows `CREATE_NO_WINDOW`、stdout/stderr pipe、120秒timeout、1MB出力上限、drop時killで実行する。Codexはephemeral/read-only/ignore-user-config、Claudeはsafe-mode/no-session-persistence/tools disabled/strict MCPで動作する。CLIの生stderrや本文はログ・UIへ返さず、分類済みエラーコードだけを返す。
 

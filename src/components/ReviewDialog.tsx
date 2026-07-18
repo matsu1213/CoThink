@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { api } from '../services/api';
 import { errorMessage, type AppErrorCode } from '../lib/errors';
+import { locateDocumentQuoteAnchor } from '../lib/companion';
 import { useStore } from '../store';
 import type { ReviewMode } from '../types';
 
@@ -15,7 +16,10 @@ export function ReviewDialog({onClose}: {onClose(): void}) {
     abort.current = new AbortController(); setBusy(true); setError('');
     try {
       const drafts = await api.review({noteId: note.id, mode, fullText: note.bodyText}, abort.current.signal);
-      for (const draft of drafts) await api.createComment({noteId: note.id, source: 'ai', commentType: draft.type, body: draft.observation, whyItMatters: draft.whyItMatters, question: draft.question, suggestedRewrite: draft.suggestedRewrite, confidence: draft.confidence, quote: draft.targetQuote});
+      for (const draft of drafts) {
+        const anchor = locateDocumentQuoteAnchor(JSON.parse(note.bodyJson), draft.targetQuote);
+        await api.createComment({noteId: note.id, source: 'ai', commentType: draft.type, body: draft.observation, whyItMatters: draft.whyItMatters, question: draft.question, suggestedRewrite: draft.suggestedRewrite, confidence: draft.confidence, blockId: anchor?.blockId, anchorFrom: anchor?.from, anchorTo: anchor?.to, quote: anchor?.quote, prefix: anchor?.prefix, suffix: anchor?.suffix});
+      }
       await refresh(); onClose();
     } catch (reviewError) { setError(errorMessage(((reviewError as {code?: AppErrorCode}).code ?? 'unknown'))); }
     finally { setBusy(false); }

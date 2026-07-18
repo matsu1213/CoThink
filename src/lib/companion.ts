@@ -43,6 +43,11 @@ export function locateCandidateAnchor(targetQuote: string | undefined, window: C
   return undefined;
 }
 
+export function locateDocumentQuoteAnchor(doc: JSONContent, targetQuote: string | undefined): CommentAnchor | undefined {
+  const blocks = documentBlocks(doc);
+  return locateCandidateAnchor(targetQuote, {text: blocks.map(block => block.text).join('\n\n'), blocks, signature: ''});
+}
+
 export function autoReviewAllowed(input: {
   now: number;
   lastRunAt: number;
